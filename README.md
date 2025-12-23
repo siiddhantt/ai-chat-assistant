@@ -16,10 +16,9 @@ A full-stack chat application with AI assistant capabilities, built with SvelteK
 git clone <repository-url>
 cd <project-directory>
 npm install
-cd packages/backend && npm install
-cd ../frontend && npm install
-cd ../..
 ```
+
+This installs all dependencies for both backend and frontend (npm workspaces).
 
 **2. Start Database Services (Docker)**
 ```bash
