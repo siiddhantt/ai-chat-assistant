@@ -1,0 +1,10 @@
+{
+  "name": "chat-agent",
+  "version": "1.0.0",
+  "description": "AI-powered live chat agent",
+  "private": true,
+  "workspaces": [
+    "packages/backend",
+    "packages/frontend"
+  ]
+}
