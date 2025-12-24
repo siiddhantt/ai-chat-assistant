@@ -1,10 +1,15 @@
 <script lang="ts">
-	import { chatStore, refreshConversationList } from '$lib/stores';
+	import { chatStore, refreshConversationList, sidebarCollapsed } from '$lib/stores';
 	import { sendMessage, APIError } from '$lib/api';
 	import ChatMessage from './ChatMessage.svelte';
+	import { Menu } from 'lucide-svelte';
 
 	let inputValue = '';
 	let messagesContainer: HTMLDivElement;
+
+	function toggleSidebar() {
+		sidebarCollapsed.update(v => !v);
+	}
 
 	async function handleSendMessage() {
 		if (!inputValue.trim()) return;
@@ -64,8 +69,13 @@
 
 <div class="chat-container">
 	<div class="chat-header">
-		<h1>Chat Agent</h1>
-		<p class="conversation-id">ID: {$chatStore.conversationId || 'New Conversation'}</p>
+		<button class="hamburger" on:click={toggleSidebar} aria-label="Toggle sidebar">
+			<Menu size={18} strokeWidth={2} />
+		</button>
+		<div class="header-content">
+			<h1>Chat Agent</h1>
+			<p class="conversation-id">ID: {$chatStore.conversationId || 'New Conversation'}</p>
+		</div>
 	</div>
 
 	<div class="messages" bind:this={messagesContainer}>
@@ -129,6 +139,45 @@
 		border-bottom: 1px solid #27272a;
 		background: #09090b;
 		color: #fafafa;
+		display: flex;
+		align-items: center;
+		gap: 16px;
+	}
+
+	.hamburger {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: 1px solid transparent;
+		padding: 8px;
+		cursor: pointer;
+		border-radius: 6px;
+		transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+		width: 36px;
+		height: 36px;
+		color: #52525b;
+	}
+
+	.hamburger:hover {
+		background: #fafafa;
+		border-color: #e4e4e7;
+		color: #09090b;
+	}
+
+	.hamburger:active {
+		transform: scale(0.96);
+	}
+
+	@media (max-width: 767px) {
+		.hamburger {
+			display: flex;
+		}
+	}
+
+	.header-content {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.chat-header h1 {
@@ -136,6 +185,12 @@
 		font-size: 20px;
 		font-weight: 600;
 		letter-spacing: -0.02em;
+	}
+
+	@media (max-width: 767px) {
+		.chat-header h1 {
+			font-size: 18px;
+		}
 	}
 
 	.conversation-id {

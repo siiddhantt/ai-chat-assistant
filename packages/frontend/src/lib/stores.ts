@@ -15,6 +15,7 @@ export interface ConversationListItem {
 }
 
 export const conversationListRefresh = writable<number>(Date.now());
+export const sidebarCollapsed = writable<boolean>(typeof window !== 'undefined' ? window.innerWidth < 768 : true);
 
 function createChatStore() {
   const initialState: ChatState = {

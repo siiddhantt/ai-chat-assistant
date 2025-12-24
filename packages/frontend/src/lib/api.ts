@@ -1,4 +1,6 @@
-const API_BASE = "http://localhost:3000/api";
+import { browser } from '$app/environment';
+
+const API_BASE = browser ? "http://localhost:3000/api" : "";
 
 export interface Message {
   id: string;

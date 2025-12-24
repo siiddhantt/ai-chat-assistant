@@ -1,16 +1,26 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { chatStore, conversationListRefresh } from '$lib/stores';
+	import { chatStore, conversationListRefresh, sidebarCollapsed } from '$lib/stores';
 	import { getConversations, getConversationHistory, deleteConversation, type Conversation } from '$lib/api';
 
 	let conversations: Conversation[] = [];
 	let loading = false;
 	let error: string | null = null;
-	let isCollapsed = false;
+	let isMobile = false;
 
 	onMount(async () => {
 		await loadConversations();
+		checkMobile();
+		window.addEventListener('resize', checkMobile);
+		return () => window.removeEventListener('resize', checkMobile);
 	});
+
+	function checkMobile() {
+		isMobile = window.innerWidth < 768;
+		if (isMobile) {
+			sidebarCollapsed.set(true);
+		}
+	}
 
 	$: $conversationListRefresh && loadConversations();
 
@@ -32,6 +42,9 @@
 			chatStore.setLoading(true);
 			const history = await getConversationHistory(id);
 			chatStore.loadConversation(id, history.messages);
+			if (isMobile) {
+				sidebarCollapsed.set(true);
+			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : 'Failed to load conversation';
 			chatStore.setError(message);
@@ -42,6 +55,9 @@
 
 	function startNewConversation() {
 		chatStore.startNew();
+		if (isMobile) {
+			sidebarCollapsed.set(true);
+		}
 	}
 
 	async function handleDelete(id: string, event: MouseEvent) {
@@ -60,7 +76,7 @@
 	}
 
 	function toggleCollapse() {
-		isCollapsed = !isCollapsed;
+		sidebarCollapsed.update(v => !v);
 	}
 
 	function formatDate(dateStr: string): string {
@@ -79,8 +95,12 @@
 	}
 </script>
 
-<div class="sidebar" class:collapsed={isCollapsed}>
-	{#if !isCollapsed}
+{#if !$sidebarCollapsed && isMobile}
+	<div class="backdrop" role="button" tabindex="0" on:click={toggleCollapse} on:keydown={(e) => e.key === 'Escape' && toggleCollapse()}></div>
+{/if}
+
+<div class="sidebar" class:collapsed={$sidebarCollapsed} class:mobile={isMobile}>
+	{#if !$sidebarCollapsed}
 		<div class="sidebar-header">
 			<h2>Conversations</h2>
 			<div class="header-buttons">
@@ -124,6 +144,22 @@
 </div>
 
 <style>
+	.backdrop {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 998;
+		animation: fadeIn 0.2s ease;
+	}
+
+	@keyframes fadeIn {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
 	.sidebar {
 		width: 280px;
 		background: #18181b;
@@ -132,11 +168,39 @@
 		flex-direction: column;
 		height: 100vh;
 		position: relative;
-		transition: width 0.3s ease;
+		transition: all 0.3s ease;
+		flex-shrink: 0;
+	}
+
+	.sidebar.mobile {
+		position: fixed;
+		top: 0;
+		left: 0;
+		z-index: 999;
+		box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
 	}
 
 	.sidebar.collapsed {
 		width: 48px;
+	}
+
+	.sidebar.mobile.collapsed {
+		transform: translateX(-100%);
+		width: 280px;
+	}
+
+	@media (max-width: 767px) {
+		.sidebar {
+			position: fixed;
+			top: 0;
+			left: 0;
+			z-index: 999;
+			box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+		}
+		
+		.sidebar.collapsed {
+			transform: translateX(-100%);
+		}
 	}
 
 	.sidebar-header {
@@ -197,6 +261,10 @@
 		align-items: center;
 		justify-content: center;
 		transition: all 0.2s;
+	}
+
+	.sidebar.mobile.collapsed .expand-btn {
+		display: none;
 	}
 
 	.expand-btn:hover {

@@ -13,5 +13,6 @@
 		display: flex;
 		height: 100vh;
 		overflow: hidden;
+		position: relative;
 	}
 </style>
