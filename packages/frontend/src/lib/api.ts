@@ -1,4 +1,4 @@
-import { browser } from '$app/environment';
+import { browser } from "$app/environment";
 
 const API_BASE = browser ? "http://localhost:3000/api" : "";
 
