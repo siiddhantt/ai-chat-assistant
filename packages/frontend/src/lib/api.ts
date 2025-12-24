@@ -1,6 +1,8 @@
 import { browser } from "$app/environment";
 
-const API_BASE = browser ? "http://localhost:3000/api" : "";
+const API_BASE = browser 
+  ? import.meta.env.VITE_API_URL || "http://localhost:3000/api"
+  : "";
 
 export interface Message {
   id: string;
