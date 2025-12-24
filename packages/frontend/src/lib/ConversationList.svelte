@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { chatStore } from '$lib/stores';
+	import { chatStore, conversationListRefresh } from '$lib/stores';
 	import { getConversations, getConversationHistory, deleteConversation, type Conversation } from '$lib/api';
 
 	let conversations: Conversation[] = [];
@@ -11,6 +11,8 @@
 	onMount(async () => {
 		await loadConversations();
 	});
+
+	$: $conversationListRefresh && loadConversations();
 
 	async function loadConversations() {
 		loading = true;

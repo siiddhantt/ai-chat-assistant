@@ -4,6 +4,7 @@ import {
   ChatResponse,
   Message,
 } from "../../types/index.js";
+import { RedisService } from "../cache/service.js";
 import { LLMService } from "../llm/service.js";
 import {
   ConversationRepository,
@@ -14,11 +15,13 @@ export class ChatService {
   private conversationRepo: ConversationRepository;
   private messageRepo: MessageRepository;
   private llmService: LLMService;
+  private redisService: RedisService;
 
   constructor() {
     this.conversationRepo = new ConversationRepository();
     this.messageRepo = new MessageRepository();
     this.llmService = new LLMService();
+    this.redisService = new RedisService();
   }
 
   private validateMessage(text: string): void {
@@ -44,9 +47,12 @@ export class ChatService {
     this.validateMessage(request.message);
 
     let conversationId = request.sessionId;
+    let isNewConversation = false;
+
     if (!conversationId) {
       const conversation = await this.conversationRepo.createConversation();
       conversationId = conversation.id;
+      isNewConversation = true;
     } else {
       const conversation = await this.conversationRepo.getConversation(
         conversationId
@@ -58,6 +64,19 @@ export class ChatService {
           "CONVERSATION_NOT_FOUND"
         );
       }
+    }
+
+    const allowed = await this.redisService.checkRateLimit(
+      conversationId,
+      5,
+      60000
+    );
+    if (!allowed) {
+      throw new AppError(
+        429,
+        "Too many messages. Please wait a moment before sending another message.",
+        "RATE_LIMIT_EXCEEDED"
+      );
     }
 
     await this.messageRepo.createMessage(
@@ -98,6 +117,7 @@ export class ChatService {
     return {
       message: aiMessage,
       conversationId,
+      isNewConversation,
     };
   }
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { chatStore } from '$lib/stores';
+	import { chatStore, refreshConversationList } from '$lib/stores';
 	import { sendMessage, APIError } from '$lib/api';
 	import ChatMessage from './ChatMessage.svelte';
 
@@ -10,6 +10,7 @@
 		if (!inputValue.trim()) return;
 
 		const userMessage = inputValue;
+		const isFirstMessage = !$chatStore.conversationId;
 		inputValue = '';
 
 		chatStore.addMessage({
@@ -27,6 +28,10 @@
 		try {
 			const response = await sendMessage($chatStore.conversationId, userMessage);
 			chatStore.addMessage(response.message);
+			
+			if (isFirstMessage) {
+				refreshConversationList();
+			}
 		} catch (error) {
 			const message =
 				error instanceof APIError

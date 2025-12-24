@@ -2,8 +2,11 @@ import express from "express";
 import chatRoutes from "./modules/chat/routes.js";
 import { config, validateConfig } from "./config/env.js";
 import { closeDb } from "./config/database.js";
+import { closeRedis, getRedisClient } from "./config/cache.js";
 
 validateConfig();
+
+getRedisClient();
 
 const app = express();
 
@@ -55,6 +58,7 @@ process.on("SIGTERM", async () => {
   console.log("SIGTERM received, shutting down gracefully...");
   server.close(async () => {
     await closeDb();
+    await closeRedis();
     process.exit(0);
   });
 });
@@ -63,6 +67,7 @@ process.on("SIGINT", async () => {
   console.log("SIGINT received, shutting down gracefully...");
   server.close(async () => {
     await closeDb();
+    await closeRedis();
     process.exit(0);
   });
 });

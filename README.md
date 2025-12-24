@@ -36,6 +36,10 @@ DATABASE_NAME=chat_agent
 DATABASE_USER=chat_user
 DATABASE_PASSWORD=secure_password
 
+# Redis (local)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
 # LLM Provider (choose one)
 LLM_PROVIDER=openai
 LLM_API_KEY=your_openai_api_key_here
@@ -95,6 +99,10 @@ DATABASE_PORT=5432
 DATABASE_NAME=chat_agent
 DATABASE_USER=chat_user
 DATABASE_PASSWORD=secure_password
+
+# Redis (Docker internal)
+REDIS_HOST=redis
+REDIS_PORT=6379
 
 # LLM Provider
 LLM_PROVIDER=openai
@@ -184,6 +192,12 @@ packages/frontend/src/
 - Svelte stores for centralized state
 - API calls abstracted into `api.ts` for reusability
 - Auto-refresh conversation list after operations
+
+**6. Rate Limiting**
+- Redis-based sliding window (5 messages/minute per conversation)
+- Prevents abuse while maintaining UX during outages (fail-open)
+- Atomic operations using sorted sets with timestamp scores
+- Automatic cleanup with TTL expiration
 
 ---
 
@@ -324,6 +338,6 @@ cd packages/backend && npm run migrate
 **Frontend:** SvelteKit 2, Vite, TypeScript  
 **Backend:** Express, TypeScript, postgres.js  
 **Database:** PostgreSQL 16  
-**Cache:** Redis 7 (available but not actively used)  
+**Cache:** Redis 7 (rate limiting)  
 **LLM:** OpenAI GPT-3.5-turbo / Anthropic Claude 3.5 Sonnet  
 **DevOps:** Docker, Docker Compose

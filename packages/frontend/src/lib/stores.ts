@@ -14,6 +14,8 @@ export interface ConversationListItem {
   updated_at: string;
 }
 
+export const conversationListRefresh = writable<number>(Date.now());
+
 function createChatStore() {
   const initialState: ChatState = {
     conversationId: null,
@@ -63,3 +65,7 @@ function createChatStore() {
 }
 
 export const chatStore = createChatStore();
+
+export function refreshConversationList() {
+  conversationListRefresh.set(Date.now());
+}

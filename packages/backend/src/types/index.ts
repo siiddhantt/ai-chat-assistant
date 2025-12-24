@@ -21,6 +21,7 @@ export interface ChatRequest {
 export interface ChatResponse {
   message: Message;
   conversationId: string;
+  isNewConversation?: boolean;
 }
 
 export interface LLMGenerateOptions {
