@@ -1,8 +1,5 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".svelte-kit/output",
-  "framework": "sveltekit",
-  "env": {
-    "VITE_API_URL": "@vite_api_url"
-  }
+  "framework": "sveltekit"
 }
