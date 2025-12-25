@@ -1,392 +1,165 @@
 <script lang="ts">
-	import { chatStore, refreshConversationList, sidebarCollapsed } from '$lib/stores';
-	import { sendMessage, APIError } from '$lib/api';
-	import ChatMessage from './ChatMessage.svelte';
-	import { Menu } from 'lucide-svelte';
-	import { onMount } from 'svelte';
+  import { chatStore, refreshConversationList } from "$lib/stores";
+  import { sendMessage, APIError } from "$lib/api";
+  import ChatMessage from "./ChatMessage.svelte";
+  import { Button } from "$lib/components/ui/button";
+  import { Textarea } from "$lib/components/ui/textarea";
+  import { ScrollArea } from "$lib/components/ui/scroll-area";
+  import { Alert, AlertDescription } from "$lib/components/ui/alert";
+  import * as Sidebar from "$lib/components/ui/sidebar";
+  import { Menu, Send, AlertCircle } from "lucide-svelte";
+  import { cn } from "$lib/utils";
+  import { IsMobile } from "$lib/hooks/is-mobile.svelte";
 
-	let inputValue = '';
-	let messagesContainer: HTMLDivElement;
-	let chatContainer: HTMLDivElement;
-	let isMobile = false;
+  let inputValue = $state("");
+  let messagesContainer: HTMLDivElement | null = $state(null);
+  const mobile = new IsMobile();
 
-	onMount(() => {
-		const checkMobile = () => {
-			isMobile = window.innerWidth < 768;
-		};
-		checkMobile();
-		window.addEventListener('resize', checkMobile);
-		return () => window.removeEventListener('resize', checkMobile);
-	});
+  $effect(() => {
+    if ($chatStore.messages.length > 0 || $chatStore.loading) {
+      scrollToBottom();
+    }
+  });
 
-	function toggleSidebar() {
-		sidebarCollapsed.update(v => !v);
-	}
+  async function handleSendMessage() {
+    if (!inputValue.trim()) return;
 
-	$: if ($chatStore.messages.length > 0 || $chatStore.loading) {
-		scrollToBottom();
-	}
+    const userMessage = inputValue;
+    const isFirstMessage = !$chatStore.conversationId;
+    inputValue = "";
 
-	async function handleSendMessage() {
-		if (!inputValue.trim()) return;
+    chatStore.addMessage({
+      id: `msg-${Date.now()}`,
+      conversationId: $chatStore.conversationId || "",
+      role: "user",
+      content: userMessage,
+      timestamp: new Date().toISOString(),
+    });
 
-		const userMessage = inputValue;
-		const isFirstMessage = !$chatStore.conversationId;
-		inputValue = '';
+    scrollToBottom();
+    chatStore.setLoading(true);
+    chatStore.setError(null);
 
-		chatStore.addMessage({
-			id: `msg-${Date.now()}`,
-			conversationId: $chatStore.conversationId || '',
-			role: 'user',
-			content: userMessage,
-			timestamp: new Date().toISOString()
-		});
+    try {
+      const response = await sendMessage(
+        $chatStore.conversationId,
+        userMessage
+      );
+      chatStore.addMessage(response.message);
 
-		scrollToBottom();
-		chatStore.setLoading(true);
-		chatStore.setError(null);
+      if (isFirstMessage) {
+        refreshConversationList();
+      }
+    } catch (error) {
+      const message =
+        error instanceof APIError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "An unexpected error occurred";
+      chatStore.setError(message);
+    } finally {
+      chatStore.setLoading(false);
+      scrollToBottom();
+    }
+  }
 
-		try {
-			const response = await sendMessage($chatStore.conversationId, userMessage);
-			chatStore.addMessage(response.message);
-			
-			if (isFirstMessage) {
-				refreshConversationList();
-			}
-		} catch (error) {
-			const message =
-				error instanceof APIError
-					? error.message
-					: error instanceof Error
-						? error.message
-						: 'An unexpected error occurred';
-			chatStore.setError(message);
-		} finally {
-			chatStore.setLoading(false);
-			scrollToBottom();
-		}
-	}
+  function scrollToBottom() {
+    setTimeout(() => {
+      if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+    }, 0);
+  }
 
-	function scrollToBottom() {
-		setTimeout(() => {
-			if (messagesContainer) {
-				messagesContainer.scrollTop = messagesContainer.scrollHeight;
-			}
-		}, 0);
-	}
-
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault();
-			handleSendMessage();
-		}
-	}
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  }
 </script>
 
-<div class="chat-container" bind:this={chatContainer}>
-	<div class="chat-header">
-		<button class="hamburger" on:click={toggleSidebar} aria-label="Toggle sidebar">
-			<Menu size={18} strokeWidth={2} />
-		</button>
-		<div class="header-content">
-			<h1>Chat Agent</h1>
-			<p class="conversation-id">ID: {$chatStore.conversationId || 'New Conversation'}</p>
-		</div>
-	</div>
+<div class="flex flex-1 flex-col bg-background min-w-0 relative">
+  <header
+    class="flex items-center gap-4 px-6 py-5 border-b border-border shrink-0"
+  >
+    <Sidebar.Trigger class="md:hidden">
+      <Menu class="size-4" />
+    </Sidebar.Trigger>
+    <div class="flex-1 min-w-0">
+      <h1 class="text-xl font-semibold tracking-tight">Chat Agent</h1>
+      <p class="text-xs text-muted-foreground font-mono mt-1">
+        ID: {$chatStore.conversationId || "New Conversation"}
+      </p>
+    </div>
+  </header>
 
-	<div class="messages" bind:this={messagesContainer}>
-		{#if $chatStore.messages.length === 0}
-			<div class="empty-state">
-				<p>Start a conversation by typing a message below</p>
-			</div>
-		{:else}
-			{#each $chatStore.messages as message (message.id)}
-				<ChatMessage {message} />
-			{/each}
-		{/if}
+  <div
+    class={cn(
+      "flex-1 overflow-y-auto p-6 flex flex-col gap-4",
+      mobile.current && "pb-40"
+    )}
+    bind:this={messagesContainer}
+  >
+    {#if $chatStore.messages.length === 0}
+      <div class="flex items-center justify-center h-full">
+        <p class="text-muted-foreground text-sm">
+          Start a conversation by typing a message below
+        </p>
+      </div>
+    {:else}
+      {#each $chatStore.messages as message (message.id)}
+        <ChatMessage {message} />
+      {/each}
+    {/if}
 
-		{#if $chatStore.error}
-			<div class="error-message">
-				<strong>Error:</strong> {$chatStore.error}
-			</div>
-		{/if}
+    {#if $chatStore.error}
+      <Alert variant="destructive">
+        <AlertCircle class="size-4" />
+        <AlertDescription>{$chatStore.error}</AlertDescription>
+      </Alert>
+    {/if}
 
-		{#if $chatStore.loading}
-			<div class="loading-indicator">
-				<span class="dot"></span>
-				<span class="dot"></span>
-				<span class="dot"></span>
-			</div>
-		{/if}
-	</div>
+    {#if $chatStore.loading}
+      <div class="flex gap-1.5 items-center justify-start px-4 py-3">
+        <span
+          class="size-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:0ms]"
+        ></span>
+        <span
+          class="size-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:150ms]"
+        ></span>
+        <span
+          class="size-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:300ms]"
+        ></span>
+      </div>
+    {/if}
+  </div>
 
-	<div class="input-area" class:mobile={isMobile}>
-		<textarea
-			bind:value={inputValue}
-			placeholder={isMobile ? "Type your message..." : "Type your message here... (Shift+Enter for new line)"}
-			disabled={$chatStore.loading}
-			on:keydown={handleKeydown}
-		></textarea>
-		<button on:click={handleSendMessage} disabled={!inputValue.trim() || $chatStore.loading}>
-			Send
-		</button>
-	</div>
+  <div
+    class={cn(
+      "sticky bottom-0 p-4 md:px-6 border-t border-border bg-background/95 backdrop-blur-sm z-50 shrink-0",
+      mobile.current && "fixed bottom-0 left-0 right-0"
+    )}
+  >
+    <div class="flex gap-3 items-stretch">
+      <Textarea
+        bind:value={inputValue}
+        placeholder={mobile.current
+          ? "Type your message..."
+          : "Type your message... (Shift+Enter for new line)"}
+        disabled={$chatStore.loading}
+        onkeydown={handleKeydown}
+        class="min-h-11 max-h-11 resize-none"
+      />
+      <Button
+        onclick={handleSendMessage}
+        disabled={!inputValue.trim() || $chatStore.loading}
+        size="icon"
+        class="shrink-0 h-11 w-11"
+      >
+        <Send class="size-4" />
+      </Button>
+    </div>
+  </div>
 </div>
-
-<style>
-	:global(body) {
-		margin: 0;
-		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
-			'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-		background: #09090b;
-	}
-
-	.chat-container {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
-		background: #09090b;
-		min-width: 0;
-		position: relative;
-	}
-
-	.chat-header {
-		padding: 20px 24px;
-		border-bottom: 1px solid #27272a;
-		background: #09090b;
-		color: #fafafa;
-		display: flex;
-		align-items: center;
-		gap: 16px;
-		flex-shrink: 0;
-	}
-
-	.hamburger {
-		display: none;
-		align-items: center;
-		justify-content: center;
-		background: transparent;
-		border: 1px solid transparent;
-		padding: 8px;
-		cursor: pointer;
-		border-radius: 6px;
-		transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-		width: 36px;
-		height: 36px;
-		color: #52525b;
-	}
-
-	.hamburger:hover {
-		background: #fafafa;
-		border-color: #e4e4e7;
-		color: #09090b;
-	}
-
-	.hamburger:active {
-		transform: scale(0.96);
-	}
-
-	@media (max-width: 767px) {
-		.hamburger {
-			display: flex;
-		}
-	}
-
-	.header-content {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.chat-header h1 {
-		margin: 0;
-		font-size: 20px;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-	}
-
-	@media (max-width: 767px) {
-		.chat-header h1 {
-			font-size: 18px;
-		}
-	}
-
-	.conversation-id {
-		margin: 6px 0 0 0;
-		font-size: 12px;
-		color: #71717a;
-		font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-	}
-
-	.messages {
-		flex: 1;
-		overflow-y: auto;
-		padding: 24px;
-		display: flex;
-		flex-direction: column;
-		gap: 16px;
-		background: #09090b;
-		scroll-behavior: smooth;
-	}
-
-	@media (max-width: 767px) {
-		.messages {
-			padding-bottom: 160px;
-		}
-	}
-
-	.empty-state {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		height: 100%;
-		color: #52525b;
-		text-align: center;
-		font-size: 14px;
-	}
-
-	.error-message {
-		padding: 12px 16px;
-		background: #450a0a;
-		border: 1px solid #7f1d1d;
-		color: #fca5a5;
-		border-radius: 8px;
-		font-size: 13px;
-	}
-
-	.loading-indicator {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-		justify-content: flex-start;
-		padding: 12px 16px;
-	}
-
-	.dot {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: #71717a;
-		animation: bounce 1.4s infinite;
-	}
-
-	.dot:nth-child(2) {
-		animation-delay: 0.2s;
-	}
-
-	.dot:nth-child(3) {
-		animation-delay: 0.4s;
-	}
-
-	@keyframes bounce {
-		0%,
-		80%,
-		100% {
-			transform: scale(0.8);
-			opacity: 0.5;
-		}
-		40% {
-			transform: scale(1);
-			opacity: 1;
-		}
-	}
-
-	.input-area {
-		position: sticky;
-		bottom: 0;
-		padding: 16px 24px;
-		border-top: 1px solid #27272a;
-		display: flex;
-		gap: 12px;
-		background: #09090b;
-		z-index: 50;
-		backdrop-filter: blur(10px);
-		background: rgba(9, 9, 11, 0.95);
-		flex-shrink: 0;
-	}
-
-	@media (max-width: 767px) {
-		.input-area {
-			position: fixed;
-			bottom: 0;
-			right: 0;
-			left: 0;
-			padding: 12px 16px;
-		}
-	}
-
-	textarea {
-		flex: 1;
-		padding: 12px 14px;
-		border: 1px solid #27272a;
-		border-radius: 8px;
-		font-size: 14px;
-		font-family: inherit;
-		resize: none;
-		height: 44px;
-		outline: none;
-		transition: all 0.2s;
-		background: #18181b;
-		color: #fafafa;
-		overflow: hidden;
-	}
-
-	textarea::placeholder {
-		color: #52525b;
-	}
-
-	textarea:focus {
-		border-color: #3f3f46;
-		background: #27272a;
-	}
-
-	textarea:disabled {
-		background: #18181b;
-		cursor: not-allowed;
-		opacity: 0.5;
-	}
-
-	button {
-		padding: 12px 20px;
-		background: #fafafa;
-		color: #09090b;
-		border: none;
-		border-radius: 8px;
-		font-weight: 500;
-		font-size: 14px;
-		cursor: pointer;
-		transition: all 0.2s;
-		white-space: nowrap;
-		flex-shrink: 0;
-	}
-
-	button:hover:not(:disabled) {
-		background: #e4e4e7;
-	}
-
-	button:active:not(:disabled) {
-		transform: scale(0.98);
-	}
-
-	button:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.messages::-webkit-scrollbar {
-		width: 6px;
-	}
-
-	.messages::-webkit-scrollbar-track {
-		background: transparent;
-	}
-
-	.messages::-webkit-scrollbar-thumb {
-		background: #27272a;
-		border-radius: 3px;
-	}
-
-	.messages::-webkit-scrollbar-thumb:hover {
-		background: #3f3f46;
-	}
-</style>

@@ -1,12 +1,16 @@
 import express from "express";
-import chatRoutes from "./modules/chat/routes.js";
-import { config, validateConfig } from "./config/env.js";
-import { closeDb } from "./config/database.js";
+
 import { closeRedis, getRedisClient } from "./config/cache.js";
+import { closeDb } from "./config/database.js";
+import { config, validateConfig } from "./config/env.js";
+import chatRoutes from "./modules/chat/routes.js";
+import { initializeTools } from "./modules/tools/index.js";
 
 validateConfig();
 
 getRedisClient();
+
+initializeTools();
 
 const app = express();
 
