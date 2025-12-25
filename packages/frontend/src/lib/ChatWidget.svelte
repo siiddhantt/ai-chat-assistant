@@ -123,7 +123,7 @@
 	<div class="input-area" class:mobile={isMobile}>
 		<textarea
 			bind:value={inputValue}
-			placeholder="Type your message here... (Shift+Enter for new line)"
+			placeholder={isMobile ? "Type your message..." : "Type your message here... (Shift+Enter for new line)"}
 			disabled={$chatStore.loading}
 			on:keydown={handleKeydown}
 		></textarea>
@@ -227,7 +227,6 @@
 		gap: 16px;
 		background: #09090b;
 		scroll-behavior: smooth;
-		padding-bottom: 140px;
 	}
 
 	@media (max-width: 767px) {
@@ -293,10 +292,8 @@
 	}
 
 	.input-area {
-		position: fixed;
+		position: sticky;
 		bottom: 0;
-		right: 0;
-		left: 0;
 		padding: 16px 24px;
 		border-top: 1px solid #27272a;
 		display: flex;
@@ -305,10 +302,15 @@
 		z-index: 50;
 		backdrop-filter: blur(10px);
 		background: rgba(9, 9, 11, 0.95);
+		flex-shrink: 0;
 	}
 
 	@media (max-width: 767px) {
 		.input-area {
+			position: fixed;
+			bottom: 0;
+			right: 0;
+			left: 0;
 			padding: 12px 16px;
 		}
 	}
@@ -321,11 +323,12 @@
 		font-size: 14px;
 		font-family: inherit;
 		resize: none;
-		max-height: 120px;
+		height: 44px;
 		outline: none;
 		transition: all 0.2s;
 		background: #18181b;
 		color: #fafafa;
+		overflow: hidden;
 	}
 
 	textarea::placeholder {
