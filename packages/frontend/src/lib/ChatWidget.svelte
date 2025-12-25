@@ -3,12 +3,28 @@
 	import { sendMessage, APIError } from '$lib/api';
 	import ChatMessage from './ChatMessage.svelte';
 	import { Menu } from 'lucide-svelte';
+	import { onMount } from 'svelte';
 
 	let inputValue = '';
 	let messagesContainer: HTMLDivElement;
+	let chatContainer: HTMLDivElement;
+	let isMobile = false;
+
+	onMount(() => {
+		const checkMobile = () => {
+			isMobile = window.innerWidth < 768;
+		};
+		checkMobile();
+		window.addEventListener('resize', checkMobile);
+		return () => window.removeEventListener('resize', checkMobile);
+	});
 
 	function toggleSidebar() {
 		sidebarCollapsed.update(v => !v);
+	}
+
+	$: if ($chatStore.messages.length > 0 || $chatStore.loading) {
+		scrollToBottom();
 	}
 
 	async function handleSendMessage() {
@@ -67,7 +83,7 @@
 	}
 </script>
 
-<div class="chat-container">
+<div class="chat-container" bind:this={chatContainer}>
 	<div class="chat-header">
 		<button class="hamburger" on:click={toggleSidebar} aria-label="Toggle sidebar">
 			<Menu size={18} strokeWidth={2} />
@@ -104,7 +120,7 @@
 		{/if}
 	</div>
 
-	<div class="input-area">
+	<div class="input-area" class:mobile={isMobile}>
 		<textarea
 			bind:value={inputValue}
 			placeholder="Type your message here... (Shift+Enter for new line)"
@@ -132,6 +148,7 @@
 		flex: 1;
 		background: #09090b;
 		min-width: 0;
+		position: relative;
 	}
 
 	.chat-header {
@@ -142,6 +159,7 @@
 		display: flex;
 		align-items: center;
 		gap: 16px;
+		flex-shrink: 0;
 	}
 
 	.hamburger {
@@ -208,6 +226,14 @@
 		flex-direction: column;
 		gap: 16px;
 		background: #09090b;
+		scroll-behavior: smooth;
+		padding-bottom: 140px;
+	}
+
+	@media (max-width: 767px) {
+		.messages {
+			padding-bottom: 160px;
+		}
 	}
 
 	.empty-state {
@@ -267,11 +293,24 @@
 	}
 
 	.input-area {
+		position: fixed;
+		bottom: 0;
+		right: 0;
+		left: 0;
 		padding: 16px 24px;
 		border-top: 1px solid #27272a;
 		display: flex;
 		gap: 12px;
 		background: #09090b;
+		z-index: 50;
+		backdrop-filter: blur(10px);
+		background: rgba(9, 9, 11, 0.95);
+	}
+
+	@media (max-width: 767px) {
+		.input-area {
+			padding: 12px 16px;
+		}
 	}
 
 	textarea {
@@ -315,6 +354,7 @@
 		cursor: pointer;
 		transition: all 0.2s;
 		white-space: nowrap;
+		flex-shrink: 0;
 	}
 
 	button:hover:not(:disabled) {
