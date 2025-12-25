@@ -4,6 +4,7 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  proposedActions?: string[];
 }
 
 export interface Conversation {
@@ -22,6 +23,11 @@ export interface ChatResponse {
   message: Message;
   conversationId: string;
   isNewConversation?: boolean;
+  proposedActions?: string[];
+  toolCalls?: Array<{
+    name: string;
+    arguments: Record<string, unknown>;
+  }>;
 }
 
 export interface LLMGenerateOptions {

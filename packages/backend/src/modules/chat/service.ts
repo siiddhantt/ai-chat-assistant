@@ -10,6 +10,7 @@ import {
   ConversationRepository,
   MessageRepository,
 } from "../persistence/repository.js";
+import { StructuredLLMResponse } from "../tools/index.js";
 
 export class ChatService {
   private conversationRepo: ConversationRepository;
@@ -89,12 +90,12 @@ export class ChatService {
       conversationId
     );
 
-    let reply: string;
+    let llmResponse: StructuredLLMResponse;
     try {
-      reply = await this.llmService.generateReply(
+      llmResponse = await this.llmService.generateReply(
         conversationMessages,
         request.message.trim(),
-        { maxTokens: 500, temperature: 0.7 }
+        { maxTokens: 1000, temperature: 0.7 }
       );
     } catch (error) {
       if (error instanceof AppError) {
@@ -110,14 +111,22 @@ export class ChatService {
     const aiMessage = await this.messageRepo.createMessage(
       conversationId,
       "assistant",
-      reply
+      llmResponse.answer
     );
     await this.conversationRepo.updateConversationTimestamp(conversationId);
 
     return {
-      message: aiMessage,
+      message: {
+        ...aiMessage,
+        proposedActions: llmResponse.proposedActions,
+      },
       conversationId,
       isNewConversation,
+      proposedActions: llmResponse.proposedActions,
+      toolCalls: llmResponse.toolCalls?.map((tc) => ({
+        name: tc.name,
+        arguments: tc.arguments,
+      })),
     };
   }
 
