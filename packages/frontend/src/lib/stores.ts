@@ -8,16 +8,7 @@ export interface ChatState {
   error: string | null;
 }
 
-export interface ConversationListItem {
-  id: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export const conversationListRefresh = writable<number>(Date.now());
-export const sidebarCollapsed = writable<boolean>(
-  typeof window !== "undefined" ? window.innerWidth < 768 : true
-);
 
 function createChatStore() {
   const initialState: ChatState = {

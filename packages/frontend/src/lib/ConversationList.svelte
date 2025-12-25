@@ -1,363 +1,200 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { chatStore, conversationListRefresh, sidebarCollapsed } from '$lib/stores';
-	import { getConversations, getConversationHistory, deleteConversation, type Conversation } from '$lib/api';
+  import { onMount } from "svelte";
+  import { chatStore, conversationListRefresh } from "$lib/stores";
+  import {
+    getConversations,
+    getConversationHistory,
+    deleteConversation,
+    type Conversation,
+  } from "$lib/api";
+  import * as Sidebar from "$lib/components/ui/sidebar";
+  import { Button } from "$lib/components/ui/button";
+  import { ScrollArea } from "$lib/components/ui/scroll-area";
+  import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import { Plus, Trash2, MessageSquare, Loader2 } from "lucide-svelte";
+  import { cn } from "$lib/utils";
 
-	let conversations: Conversation[] = [];
-	let loading = false;
-	let error: string | null = null;
-	let isMobile = false;
+  let conversations: Conversation[] = $state([]);
+  let loading = $state(false);
+  let error: string | null = $state(null);
+  let deleteConfirmId: string | null = $state(null);
 
-	onMount(async () => {
-		await loadConversations();
-		checkMobile();
-		window.addEventListener('resize', checkMobile);
-		return () => window.removeEventListener('resize', checkMobile);
-	});
+  onMount(() => {
+    loadConversations();
+  });
 
-	function checkMobile() {
-		isMobile = window.innerWidth < 768;
-		if (isMobile) {
-			sidebarCollapsed.set(true);
-		}
-	}
+  $effect(() => {
+    if ($conversationListRefresh) {
+      loadConversations();
+    }
+  });
 
-	$: $conversationListRefresh && loadConversations();
+  async function loadConversations() {
+    loading = true;
+    error = null;
+    try {
+      const response = await getConversations();
+      conversations = response.conversations;
+    } catch (err) {
+      error =
+        err instanceof Error ? err.message : "Failed to load conversations";
+    } finally {
+      loading = false;
+    }
+  }
 
-	async function loadConversations() {
-		loading = true;
-		error = null;
-		try {
-			const response = await getConversations();
-			conversations = response.conversations;
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to load conversations';
-		} finally {
-			loading = false;
-		}
-	}
+  async function loadConversation(id: string) {
+    try {
+      chatStore.setLoading(true);
+      const history = await getConversationHistory(id);
+      chatStore.loadConversation(id, history.messages);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to load conversation";
+      chatStore.setError(message);
+    } finally {
+      chatStore.setLoading(false);
+    }
+  }
 
-	async function loadConversation(id: string) {
-		try {
-			chatStore.setLoading(true);
-			const history = await getConversationHistory(id);
-			chatStore.loadConversation(id, history.messages);
-			if (isMobile) {
-				sidebarCollapsed.set(true);
-			}
-		} catch (err) {
-			const message = err instanceof Error ? err.message : 'Failed to load conversation';
-			chatStore.setError(message);
-		} finally {
-			chatStore.setLoading(false);
-		}
-	}
+  function startNewConversation() {
+    chatStore.startNew();
+  }
 
-	function startNewConversation() {
-		chatStore.startNew();
-		if (isMobile) {
-			sidebarCollapsed.set(true);
-		}
-	}
+  async function confirmDelete() {
+    if (!deleteConfirmId) return;
 
-	async function handleDelete(id: string, event: MouseEvent) {
-		event.stopPropagation();
-		if (!confirm('Delete this conversation?')) return;
+    try {
+      await deleteConversation(deleteConfirmId);
+      conversations = conversations.filter((c) => c.id !== deleteConfirmId);
+      if ($chatStore.conversationId === deleteConfirmId) {
+        chatStore.startNew();
+      }
+    } catch (err) {
+      alert(
+        err instanceof Error ? err.message : "Failed to delete conversation"
+      );
+    } finally {
+      deleteConfirmId = null;
+    }
+  }
 
-		try {
-			await deleteConversation(id);
-			conversations = conversations.filter(c => c.id !== id);
-			if ($chatStore.conversationId === id) {
-				chatStore.startNew();
-			}
-		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Failed to delete conversation');
-		}
-	}
+  function formatDate(dateStr: string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-	function toggleCollapse() {
-		sidebarCollapsed.update(v => !v);
-	}
-
-	function formatDate(dateStr: string): string {
-		const date = new Date(dateStr);
-		const now = new Date();
-		const diffMs = now.getTime() - date.getTime();
-		const diffMins = Math.floor(diffMs / 60000);
-		const diffHours = Math.floor(diffMs / 3600000);
-		const diffDays = Math.floor(diffMs / 86400000);
-
-		if (diffMins < 1) return 'Just now';
-		if (diffMins < 60) return `${diffMins}m ago`;
-		if (diffHours < 24) return `${diffHours}h ago`;
-		if (diffDays < 7) return `${diffDays}d ago`;
-		return date.toLocaleDateString();
-	}
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  }
 </script>
 
-{#if !$sidebarCollapsed && isMobile}
-	<div class="backdrop" role="button" tabindex="0" on:click={toggleCollapse} on:keydown={(e) => e.key === 'Escape' && toggleCollapse()}></div>
-{/if}
+<Sidebar.Root collapsible="offcanvas">
+  <Sidebar.Header class="p-4 border-b border-sidebar-border">
+    <div class="flex items-center justify-between">
+      <h2 class="text-base font-semibold">Conversations</h2>
+      <Button variant="ghost" size="icon-sm" onclick={startNewConversation}>
+        <Plus class="size-4" />
+      </Button>
+    </div>
+  </Sidebar.Header>
 
-<div class="sidebar" class:collapsed={$sidebarCollapsed} class:mobile={isMobile}>
-	{#if !$sidebarCollapsed}
-		<div class="sidebar-header">
-			<h2>Conversations</h2>
-			<div class="header-buttons">
-				<button class="new-btn" on:click={startNewConversation}>+ New</button>
-				<button class="collapse-btn" on:click={toggleCollapse} title="Collapse sidebar">
-					←
-				</button>
-			</div>
-		</div>
+  <Sidebar.Content>
+    <ScrollArea class="flex-1">
+      <Sidebar.Group class="p-2">
+        <Sidebar.GroupContent>
+          {#if loading}
+            <div
+              class="flex items-center justify-center py-8 text-muted-foreground"
+            >
+              <Loader2 class="size-4 animate-spin mr-2" />
+              <span class="text-sm">Loading...</span>
+            </div>
+          {:else if error}
+            <div class="text-sm text-destructive p-4 text-center">{error}</div>
+          {:else if conversations.length === 0}
+            <div class="text-sm text-muted-foreground p-4 text-center">
+              No conversations yet
+            </div>
+          {:else}
+            <Sidebar.Menu>
+              {#each conversations as conv (conv.id)}
+                <Sidebar.MenuItem class="group">
+                  <Sidebar.MenuButton
+                    isActive={$chatStore.conversationId === conv.id}
+                    class="h-auto py-2.5 pr-10"
+                  >
+                    {#snippet child({ props })}
+                      <button
+                        {...props}
+                        onclick={() => loadConversation(conv.id)}
+                      >
+                        <MessageSquare class="size-4 shrink-0" />
+                        <div
+                          class="flex flex-col items-start gap-1 min-w-0 overflow-hidden"
+                        >
+                          <span
+                            class="text-xs font-mono truncate w-full text-left"
+                          >
+                            {conv.id.slice(0, 16)}...
+                          </span>
+                          <span
+                            class="text-xs text-muted-foreground whitespace-nowrap"
+                          >
+                            {formatDate(conv.updatedAt)}
+                          </span>
+                        </div>
+                      </button>
+                    {/snippet}
+                  </Sidebar.MenuButton>
+                  <Sidebar.MenuAction
+                    class="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity top-1/2! -translate-y-1/2! w-6! p-1!"
+                  >
+                    {#snippet child({ props })}
+                      <button
+                        {...props}
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          deleteConfirmId = conv.id;
+                        }}
+                      >
+                        <Trash2 class="size-3.5 text-destructive" />
+                      </button>
+                    {/snippet}
+                  </Sidebar.MenuAction>
+                </Sidebar.MenuItem>
+              {/each}
+            </Sidebar.Menu>
+          {/if}
+        </Sidebar.GroupContent>
+      </Sidebar.Group>
+    </ScrollArea>
+  </Sidebar.Content>
 
-		{#if loading}
-			<div class="loading">Loading...</div>
-		{:else if error}
-			<div class="error">{error}</div>
-		{:else if conversations.length === 0}
-			<div class="empty">No conversations yet</div>
-		{:else}
-			<div class="conversation-list">
-				{#each conversations as conv (conv.id)}
-					<div class="conversation-wrapper">
-						<button
-							class="conversation-item"
-							class:active={$chatStore.conversationId === conv.id}
-							on:click={() => loadConversation(conv.id)}
-						>
-							<div class="conv-id">{conv.id.slice(0, 16)}...</div>
-							<div class="conv-date">{formatDate(conv.updatedAt)}</div>
-						</button>
-						<button class="delete-btn" on:click={(e) => handleDelete(conv.id, e)} title="Delete">
-							×
-						</button>
-					</div>
-				{/each}
-			</div>
-		{/if}
-	{:else}
-		<button class="expand-btn" on:click={toggleCollapse} title="Expand sidebar">
-			→
-		</button>
-	{/if}
-</div>
+  <Sidebar.Rail />
+</Sidebar.Root>
 
-<style>
-	.backdrop {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		background: rgba(0, 0, 0, 0.5);
-		z-index: 998;
-		animation: fadeIn 0.2s ease;
-	}
-
-	@keyframes fadeIn {
-		from { opacity: 0; }
-		to { opacity: 1; }
-	}
-
-	.sidebar {
-		width: 280px;
-		background: #18181b;
-		border-right: 1px solid #27272a;
-		display: flex;
-		flex-direction: column;
-		height: 100vh;
-		position: relative;
-		transition: all 0.3s ease;
-		flex-shrink: 0;
-	}
-
-	.sidebar.mobile {
-		position: fixed;
-		top: 0;
-		left: 0;
-		z-index: 999;
-		box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
-	}
-
-	.sidebar.collapsed {
-		width: 48px;
-	}
-
-	.sidebar.mobile.collapsed {
-		transform: translateX(-100%);
-		width: 280px;
-	}
-
-	@media (max-width: 767px) {
-		.sidebar {
-			position: fixed;
-			top: 0;
-			left: 0;
-			z-index: 999;
-			box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
-		}
-		
-		.sidebar.collapsed {
-			transform: translateX(-100%);
-		}
-	}
-
-	.sidebar-header {
-		padding: 20px;
-		border-bottom: 1px solid #27272a;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.header-buttons {
-		display: flex;
-		gap: 8px;
-	}
-
-	.sidebar-header h2 {
-		margin: 0;
-		font-size: 16px;
-		font-weight: 600;
-		color: #fafafa;
-		letter-spacing: -0.02em;
-	}
-
-	.new-btn,
-	.collapse-btn {
-		background: #27272a;
-		color: #a1a1aa;
-		border: 1px solid #3f3f46;
-		padding: 6px 12px;
-		border-radius: 6px;
-		font-size: 13px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.new-btn:hover,
-	.collapse-btn:hover {
-		background: #3f3f46;
-		border-color: #52525b;
-		color: #e4e4e7;
-	}
-
-	.expand-btn {
-		position: absolute;
-		top: 20px;
-		left: 50%;
-		transform: translateX(-50%);
-		background: #27272a;
-		color: #a1a1aa;
-		border: 1px solid #3f3f46;
-		width: 32px;
-		height: 32px;
-		border-radius: 6px;
-		font-size: 14px;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: all 0.2s;
-	}
-
-	.sidebar.mobile.collapsed .expand-btn {
-		display: none;
-	}
-
-	.expand-btn:hover {
-		background: #3f3f46;
-		border-color: #52525b;
-		color: #e4e4e7;
-	}
-
-	.conversation-list {
-		flex: 1;
-		overflow-y: auto;
-		padding: 8px;
-	}
-
-	.conversation-wrapper {
-		position: relative;
-		margin-bottom: 6px;
-	}
-
-	.conversation-item {
-		width: 100%;
-		background: transparent;
-		border: 1px solid #27272a;
-		padding: 12px;
-		padding-right: 36px;
-		border-radius: 8px;
-		cursor: pointer;
-		transition: all 0.2s;
-		text-align: left;
-		color: #fafafa;
-	}
-
-	.conversation-item:hover {
-		background: #27272a;
-		border-color: #3f3f46;
-	}
-
-	.conversation-item.active {
-		background: #3f3f46;
-		border-color: #52525b;
-	}
-
-	.delete-btn {
-		position: absolute;
-		right: 8px;
-		top: 50%;
-		transform: translateY(-50%);
-		width: 24px;
-		height: 24px;
-		background: transparent;
-		color: #71717a;
-		border: none;
-		border-radius: 4px;
-		font-size: 20px;
-		line-height: 1;
-		cursor: pointer;
-		transition: all 0.2s;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0;
-	}
-
-	.delete-btn:hover {
-		background: #450a0a;
-		color: #fca5a5;
-	}
-
-	.conv-id {
-		font-size: 13px;
-		font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-		margin-bottom: 4px;
-		color: #fafafa;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.conv-date {
-		font-size: 11px;
-		color: #71717a;
-	}
-
-	.loading,
-	.error,
-	.empty {
-		padding: 20px;
-		text-align: center;
-		font-size: 13px;
-		color: #71717a;
-	}
-
-	.error {
-		color: #fca5a5;
-	}
-</style>
+<AlertDialog.Root
+  open={deleteConfirmId !== null}
+  onOpenChange={(open) => !open && (deleteConfirmId = null)}
+>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>Delete conversation?</AlertDialog.Title>
+      <AlertDialog.Description>
+        This action cannot be undone. This will permanently delete this
+        conversation.
+      </AlertDialog.Description>
+    </AlertDialog.Header>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+      <AlertDialog.Action onclick={confirmDelete}>Delete</AlertDialog.Action>
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
