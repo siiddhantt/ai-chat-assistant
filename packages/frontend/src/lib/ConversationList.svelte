@@ -8,16 +8,18 @@
     type Conversation,
   } from "$lib/api";
   import * as Sidebar from "$lib/components/ui/sidebar";
+  import { useSidebar } from "$lib/components/ui/sidebar/context.svelte";
   import { Button } from "$lib/components/ui/button";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
-  import { Plus, Trash2, MessageSquare, Loader2 } from "lucide-svelte";
-  import { cn } from "$lib/utils";
+  import { Plus, CircleX, MessageSquare, LoaderCircle } from "lucide-svelte";
 
   let conversations: Conversation[] = $state([]);
   let loading = $state(false);
   let error: string | null = $state(null);
   let deleteConfirmId: string | null = $state(null);
+
+  const sidebar = useSidebar();
 
   onMount(() => {
     loadConversations();
@@ -48,6 +50,9 @@
       chatStore.setLoading(true);
       const history = await getConversationHistory(id);
       chatStore.loadConversation(id, history.messages);
+      if (sidebar.isMobile) {
+        sidebar.setOpenMobile(false);
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to load conversation";
@@ -59,6 +64,9 @@
 
   function startNewConversation() {
     chatStore.startNew();
+    if (sidebar.isMobile) {
+      sidebar.setOpenMobile(false);
+    }
   }
 
   async function confirmDelete() {
@@ -113,7 +121,7 @@
             <div
               class="flex items-center justify-center py-8 text-muted-foreground"
             >
-              <Loader2 class="size-4 animate-spin mr-2" />
+              <LoaderCircle class="size-4 animate-spin mr-2" />
               <span class="text-sm">Loading...</span>
             </div>
           {:else if error}
@@ -154,7 +162,7 @@
                     {/snippet}
                   </Sidebar.MenuButton>
                   <Sidebar.MenuAction
-                    class="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity top-1/2! -translate-y-1/2! w-6! p-1!"
+                    class="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity top-1/2! -translate-y-1/2! w-6! p-1! hover:bg-transparent"
                   >
                     {#snippet child({ props })}
                       <button
@@ -164,7 +172,7 @@
                           deleteConfirmId = conv.id;
                         }}
                       >
-                        <Trash2 class="size-3.5 text-destructive" />
+                        <CircleX class="size-3.5 text-destructive" />
                       </button>
                     {/snippet}
                   </Sidebar.MenuAction>

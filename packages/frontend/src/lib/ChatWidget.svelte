@@ -4,22 +4,35 @@
   import ChatMessage from "./ChatMessage.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Textarea } from "$lib/components/ui/textarea";
-  import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Alert, AlertDescription } from "$lib/components/ui/alert";
   import * as Sidebar from "$lib/components/ui/sidebar";
-  import { Menu, Send, AlertCircle } from "lucide-svelte";
+  import { Menu, Send, CircleAlert } from "lucide-svelte";
   import { cn } from "$lib/utils";
   import { IsMobile } from "$lib/hooks/is-mobile.svelte";
 
   let inputValue = $state("");
   let messagesContainer: HTMLDivElement | null = $state(null);
+  let isUserScrolling = $state(false);
   const mobile = new IsMobile();
+  const SCROLL_THRESHOLD = 200;
 
   $effect(() => {
-    if ($chatStore.messages.length > 0 || $chatStore.loading) {
-      scrollToBottom();
+    if ($chatStore.messages.length > 0) {
+      if (!isUserScrolling) {
+        scrollToBottom();
+      }
     }
   });
+
+  function isScrolledToBottom(): boolean {
+    if (!messagesContainer) return true;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
+    return scrollHeight - (scrollTop + clientHeight) < SCROLL_THRESHOLD;
+  }
+
+  function handleScroll() {
+    isUserScrolling = !isScrolledToBottom();
+  }
 
   async function handleSendMessage() {
     if (!inputValue.trim()) return;
@@ -36,7 +49,7 @@
       timestamp: new Date().toISOString(),
     });
 
-    scrollToBottom();
+    isUserScrolling = false;
     chatStore.setLoading(true);
     chatStore.setError(null);
 
@@ -46,6 +59,7 @@
         userMessage
       );
       chatStore.addMessage(response.message);
+      isUserScrolling = false;
 
       if (isFirstMessage) {
         refreshConversationList();
@@ -60,16 +74,20 @@
       chatStore.setError(message);
     } finally {
       chatStore.setLoading(false);
-      scrollToBottom();
     }
   }
 
   function scrollToBottom() {
-    setTimeout(() => {
+    if (!messagesContainer) return;
+
+    requestAnimationFrame(() => {
       if (messagesContainer) {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        messagesContainer.scrollTo({
+          top: messagesContainer.scrollHeight,
+          behavior: "auto",
+        });
       }
-    }, 0);
+    });
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -80,7 +98,7 @@
   }
 </script>
 
-<div class="flex flex-1 flex-col bg-background min-w-0 relative">
+<div class="flex h-screen flex-col bg-background min-w-0 relative">
   <header
     class="flex items-center gap-4 px-6 py-5 border-b border-border shrink-0"
   >
@@ -97,10 +115,11 @@
 
   <div
     class={cn(
-      "flex-1 overflow-y-auto p-6 flex flex-col gap-4",
-      mobile.current && "pb-40"
+      "flex-1 overflow-y-auto p-6 flex flex-col gap-4 scroll-smooth",
+      mobile.current && "pb-24"
     )}
     bind:this={messagesContainer}
+    onscroll={handleScroll}
   >
     {#if $chatStore.messages.length === 0}
       <div class="flex items-center justify-center h-full">
@@ -116,7 +135,7 @@
 
     {#if $chatStore.error}
       <Alert variant="destructive">
-        <AlertCircle class="size-4" />
+        <CircleAlert class="size-4" />
         <AlertDescription>{$chatStore.error}</AlertDescription>
       </Alert>
     {/if}
