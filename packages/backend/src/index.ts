@@ -3,7 +3,11 @@ import express from "express";
 import { closeRedis, getRedisClient } from "./config/cache.js";
 import { closeDb } from "./config/database.js";
 import { config, validateConfig } from "./config/env.js";
+import authRoutes from "./modules/auth/routes.js";
 import chatRoutes from "./modules/chat/routes.js";
+import ownerRoutes from "./modules/owner/routes.js";
+import publicChatRoutes from "./modules/public-chat/routes.js";
+import visitorRoutes from "./modules/visitor/routes.js";
 import { initializeTools } from "./modules/tools/index.js";
 
 validateConfig();
@@ -29,7 +33,10 @@ app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", origin || allowedOrigins[0]);
   }
 
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  );
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") {
@@ -39,7 +46,11 @@ app.use((req, res, next) => {
   }
 });
 
-app.use("/api/chat", chatRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/chat", publicChatRoutes);
+app.use("/api/internal/chat", chatRoutes);
+app.use("/api/owner", ownerRoutes);
+app.use("/api/visitor", visitorRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });

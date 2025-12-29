@@ -1,7 +1,8 @@
 import { writable } from "svelte/store";
-import type { Message } from "./api";
+import type { Message } from "./types";
 
 export interface ChatState {
+  tenantSlug: string | null;
   conversationId: string | null;
   messages: Message[];
   loading: boolean;
@@ -12,6 +13,7 @@ export const conversationListRefresh = writable<number>(Date.now());
 
 function createChatStore() {
   const initialState: ChatState = {
+    tenantSlug: null,
     conversationId: null,
     messages: [],
     loading: false,
@@ -22,6 +24,9 @@ function createChatStore() {
 
   return {
     subscribe,
+    setTenant(slug: string) {
+      update((state) => ({ ...state, tenantSlug: slug }));
+    },
     addMessage(message: Message) {
       update((state) => ({
         ...state,
@@ -42,7 +47,8 @@ function createChatStore() {
       update((state) => ({ ...state, conversationId }));
     },
     loadConversation(conversationId: string, messages: Message[]) {
-      update(() => ({
+      update((state) => ({
+        ...state,
         conversationId,
         messages,
         loading: false,
@@ -50,7 +56,10 @@ function createChatStore() {
       }));
     },
     startNew() {
-      set(initialState);
+      update((state) => ({
+        ...initialState,
+        tenantSlug: state.tenantSlug,
+      }));
     },
     reset() {
       set(initialState);

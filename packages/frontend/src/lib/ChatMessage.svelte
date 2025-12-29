@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Message } from "$lib/api";
+  import type { Message } from "$lib/types";
   import { cn } from "$lib/utils";
 
   interface Props {

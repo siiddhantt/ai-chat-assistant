@@ -1,6 +1,7 @@
 <script lang="ts">
   import { chatStore, refreshConversationList } from "$lib/stores";
-  import { sendMessage, APIError } from "$lib/api";
+  import { publicChat, ApiError } from "$lib/api/client";
+  import { getVisitorId, storeConversationId } from "$lib/visitor";
   import ChatMessage from "./ChatMessage.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Textarea } from "$lib/components/ui/textarea";
@@ -10,11 +11,19 @@
   import { cn } from "$lib/utils";
   import { IsMobile } from "$lib/hooks/is-mobile.svelte";
 
+  interface Props {
+    tenantName?: string;
+  }
+
+  let { tenantName = "Chat" }: Props = $props();
+
   let inputValue = $state("");
   let messagesContainer: HTMLDivElement | null = $state(null);
   let isUserScrolling = $state(false);
   const mobile = new IsMobile();
   const SCROLL_THRESHOLD = 200;
+
+  const visitorId = getVisitorId();
 
   $effect(() => {
     if ($chatStore.messages.length > 0) {
@@ -35,7 +44,7 @@
   }
 
   async function handleSendMessage() {
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || !$chatStore.tenantSlug) return;
 
     const userMessage = inputValue;
     const isFirstMessage = !$chatStore.conversationId;
@@ -54,10 +63,18 @@
     chatStore.setError(null);
 
     try {
-      const response = await sendMessage(
-        $chatStore.conversationId,
-        userMessage
+      const response = await publicChat.sendMessage(
+        $chatStore.tenantSlug,
+        userMessage,
+        visitorId,
+        $chatStore.conversationId ?? undefined
       );
+
+      if (response.isNewConversation) {
+        chatStore.setConversationId(response.conversationId);
+        storeConversationId($chatStore.tenantSlug, response.conversationId);
+      }
+
       chatStore.addMessage(response.message);
       isUserScrolling = false;
 
@@ -66,7 +83,7 @@
       }
     } catch (error) {
       const message =
-        error instanceof APIError
+        error instanceof ApiError
           ? error.message
           : error instanceof Error
             ? error.message
@@ -106,9 +123,11 @@
       <Menu class="size-4" />
     </Sidebar.Trigger>
     <div class="flex-1 min-w-0">
-      <h1 class="text-xl font-semibold tracking-tight">Chat Agent</h1>
+      <h1 class="text-xl font-semibold tracking-tight">{tenantName}</h1>
       <p class="text-xs text-muted-foreground font-mono mt-1">
-        ID: {$chatStore.conversationId || "New Conversation"}
+        {$chatStore.conversationId
+          ? `ID: ${$chatStore.conversationId.slice(0, 8)}...`
+          : "New Conversation"}
       </p>
     </div>
   </header>

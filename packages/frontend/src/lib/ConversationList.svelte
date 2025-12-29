@@ -1,25 +1,33 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { chatStore, conversationListRefresh } from "$lib/stores";
   import {
-    getConversations,
-    getConversationHistory,
-    deleteConversation,
-    type Conversation,
-  } from "$lib/api";
+    visitor,
+    publicChat,
+    ApiError,
+    type RecentConversation,
+  } from "$lib/api/client";
+  import {
+    getVisitorId,
+    storeConversationId,
+    clearConversationId,
+  } from "$lib/visitor";
   import * as Sidebar from "$lib/components/ui/sidebar";
   import { useSidebar } from "$lib/components/ui/sidebar/context.svelte";
   import { Button } from "$lib/components/ui/button";
-  import { ScrollArea } from "$lib/components/ui/scroll-area";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
-  import { Plus, CircleX, MessageSquare, LoaderCircle } from "lucide-svelte";
+  import { ScrollArea } from "$lib/components/ui/scroll-area";
+  import { MessageSquare, LoaderCircle, Trash2 } from "lucide-svelte";
 
-  let conversations: Conversation[] = $state([]);
+  let conversations: RecentConversation[] = $state([]);
   let loading = $state(false);
   let error: string | null = $state(null);
-  let deleteConfirmId: string | null = $state(null);
+  let deleteConfirmOpen = $state(false);
+  let conversationToDelete: RecentConversation | null = $state(null);
 
   const sidebar = useSidebar();
+  const visitorId = getVisitorId();
 
   onMount(() => {
     loadConversations();
@@ -35,55 +43,73 @@
     loading = true;
     error = null;
     try {
-      const response = await getConversations();
+      const response = await visitor.getRecentConversations(visitorId, 5);
       conversations = response.conversations;
     } catch (err) {
-      error =
-        err instanceof Error ? err.message : "Failed to load conversations";
+      if (err instanceof ApiError && err.status !== 404) {
+        error = err.message;
+      }
     } finally {
       loading = false;
     }
   }
 
-  async function loadConversation(id: string) {
-    try {
-      chatStore.setLoading(true);
-      const history = await getConversationHistory(id);
-      chatStore.loadConversation(id, history.messages);
-      if (sidebar.isMobile) {
-        sidebar.setOpenMobile(false);
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to load conversation";
-      chatStore.setError(message);
-    } finally {
-      chatStore.setLoading(false);
-    }
-  }
+  async function selectConversation(conv: RecentConversation) {
+    const isCurrentTenant = $chatStore.tenantSlug === conv.tenantSlug;
 
-  function startNewConversation() {
-    chatStore.startNew();
+    if (isCurrentTenant) {
+      try {
+        chatStore.setLoading(true);
+        const history = await publicChat.getConversation(
+          conv.tenantSlug,
+          conv.id,
+          visitorId
+        );
+        chatStore.loadConversation(conv.id, history.messages);
+        storeConversationId(conv.tenantSlug, conv.id);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to load conversation";
+        chatStore.setError(message);
+      } finally {
+        chatStore.setLoading(false);
+      }
+    } else {
+      storeConversationId(conv.tenantSlug, conv.id);
+      goto(`/chat/${conv.tenantSlug}`);
+    }
+
     if (sidebar.isMobile) {
       sidebar.setOpenMobile(false);
     }
   }
 
+  function openDeleteConfirm(e: MouseEvent, conv: RecentConversation) {
+    e.stopPropagation();
+    conversationToDelete = conv;
+    deleteConfirmOpen = true;
+  }
+
   async function confirmDelete() {
-    if (!deleteConfirmId) return;
+    if (!conversationToDelete) return;
 
     try {
-      await deleteConversation(deleteConfirmId);
-      conversations = conversations.filter((c) => c.id !== deleteConfirmId);
-      if ($chatStore.conversationId === deleteConfirmId) {
-        chatStore.startNew();
+      await visitor.deleteConversation(conversationToDelete.id, visitorId);
+      if (conversationToDelete) {
+        conversations = conversations.filter(
+          (c) => conversationToDelete && c.id !== conversationToDelete.id
+        );
       }
+
+      if ($chatStore.conversationId === conversationToDelete.id) {
+        chatStore.startNew();
+        clearConversationId(conversationToDelete.tenantSlug);
+      }
+
+      deleteConfirmOpen = false;
+      conversationToDelete = null;
     } catch (err) {
-      alert(
-        err instanceof Error ? err.message : "Failed to delete conversation"
-      );
-    } finally {
-      deleteConfirmId = null;
+      console.error("Failed to delete conversation:", err);
     }
   }
 
@@ -105,12 +131,7 @@
 
 <Sidebar.Root collapsible="offcanvas">
   <Sidebar.Header class="p-4 border-b border-sidebar-border">
-    <div class="flex items-center justify-between">
-      <h2 class="text-base font-semibold">Conversations</h2>
-      <Button variant="ghost" size="icon-sm" onclick={startNewConversation}>
-        <Plus class="size-4" />
-      </Button>
-    </div>
+    <h2 class="text-base font-semibold">Recent Chats</h2>
   </Sidebar.Header>
 
   <Sidebar.Content>
@@ -136,21 +157,21 @@
                 <Sidebar.MenuItem class="group">
                   <Sidebar.MenuButton
                     isActive={$chatStore.conversationId === conv.id}
-                    class="h-auto py-2.5 pr-10"
+                    class="h-auto py-2.5"
                   >
                     {#snippet child({ props })}
                       <button
                         {...props}
-                        onclick={() => loadConversation(conv.id)}
+                        onclick={() => selectConversation(conv)}
                       >
                         <MessageSquare class="size-4 shrink-0" />
                         <div
-                          class="flex flex-col items-start gap-1 min-w-0 overflow-hidden"
+                          class="flex flex-col items-start gap-0.5 min-w-0 overflow-hidden flex-1"
                         >
                           <span
-                            class="text-xs font-mono truncate w-full text-left"
+                            class="text-sm truncate w-full text-left font-medium"
                           >
-                            {conv.id.slice(0, 16)}...
+                            {conv.tenantName}
                           </span>
                           <span
                             class="text-xs text-muted-foreground whitespace-nowrap"
@@ -161,21 +182,16 @@
                       </button>
                     {/snippet}
                   </Sidebar.MenuButton>
-                  <Sidebar.MenuAction
-                    class="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity top-1/2! -translate-y-1/2! w-6! p-1! hover:bg-transparent"
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    class="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onclick={(e) => openDeleteConfirm(e, conv)}
                   >
-                    {#snippet child({ props })}
-                      <button
-                        {...props}
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          deleteConfirmId = conv.id;
-                        }}
-                      >
-                        <CircleX class="size-3.5 text-destructive" />
-                      </button>
-                    {/snippet}
-                  </Sidebar.MenuAction>
+                    <Trash2
+                      class="size-3.5 text-muted-foreground hover:text-destructive"
+                    />
+                  </Button>
                 </Sidebar.MenuItem>
               {/each}
             </Sidebar.Menu>
@@ -188,21 +204,23 @@
   <Sidebar.Rail />
 </Sidebar.Root>
 
-<AlertDialog.Root
-  open={deleteConfirmId !== null}
-  onOpenChange={(open) => !open && (deleteConfirmId = null)}
->
+<AlertDialog.Root bind:open={deleteConfirmOpen}>
   <AlertDialog.Content>
     <AlertDialog.Header>
-      <AlertDialog.Title>Delete conversation?</AlertDialog.Title>
+      <AlertDialog.Title>Delete Conversation</AlertDialog.Title>
       <AlertDialog.Description>
-        This action cannot be undone. This will permanently delete this
-        conversation.
+        Are you sure you want to delete this conversation with {conversationToDelete?.tenantName}?
+        This action cannot be undone.
       </AlertDialog.Description>
     </AlertDialog.Header>
     <AlertDialog.Footer>
       <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-      <AlertDialog.Action onclick={confirmDelete}>Delete</AlertDialog.Action>
+      <AlertDialog.Action
+        onclick={confirmDelete}
+        class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+      >
+        Delete
+      </AlertDialog.Action>
     </AlertDialog.Footer>
   </AlertDialog.Content>
 </AlertDialog.Root>

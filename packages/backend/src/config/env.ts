@@ -30,6 +30,8 @@ export const config = {
   cors: {
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
   },
+
+  jwtSecret: process.env.JWT_SECRET || "dev-secret-change-in-production",
 };
 
 export function validateConfig(): void {
@@ -39,5 +41,12 @@ export function validateConfig(): void {
 
   if (!config.database.url && !config.database.host) {
     throw new Error("DATABASE_URL or DATABASE_HOST is required");
+  }
+
+  if (
+    config.nodeEnv === "production" &&
+    config.jwtSecret === "dev-secret-change-in-production"
+  ) {
+    throw new Error("JWT_SECRET must be set in production");
   }
 }
