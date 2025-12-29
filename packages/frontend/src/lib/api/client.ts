@@ -158,10 +158,19 @@ export interface RecentConversation {
 }
 
 export const visitor = {
-  getRecentConversations: (visitorId: string, limit = 5) =>
-    request<{ conversations: RecentConversation[] }>(
-      `/visitor/conversations?visitorId=${visitorId}&limit=${limit}`
-    ),
+  getRecentConversations: (
+    visitorId: string,
+    opts?: { limit?: number; status?: string; includeConversationId?: string }
+  ) => {
+    const params = new URLSearchParams({ visitorId });
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    if (opts?.status) params.set("status", opts.status);
+    if (opts?.includeConversationId)
+      params.set("includeConversationId", opts.includeConversationId);
+    return request<{ conversations: RecentConversation[] }>(
+      `/visitor/conversations?${params.toString()}`
+    );
+  },
 
   deleteConversation: (conversationId: string, visitorId: string) =>
     request<{ success: boolean }>(

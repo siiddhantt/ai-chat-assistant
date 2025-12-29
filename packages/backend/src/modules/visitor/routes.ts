@@ -6,7 +6,7 @@ const router = Router();
 
 router.get("/conversations", async (req: Request, res: Response) => {
   try {
-    const { visitorId, limit } = req.query;
+    const { visitorId, limit, status, includeConversationId } = req.query;
 
     if (!visitorId || typeof visitorId !== "string") {
       throw new AppError(400, "Visitor ID is required", "MISSING_VISITOR_ID");
@@ -15,7 +15,17 @@ router.get("/conversations", async (req: Request, res: Response) => {
     const conversationRepo = new ConversationRepository();
     const conversations = await conversationRepo.findByVisitorIdAcrossTenants(
       visitorId,
-      limit ? parseInt(limit as string, 10) : 5
+      {
+        limit: limit ? parseInt(limit as string, 10) : 5,
+        status:
+          typeof status === "string" && status !== "all"
+            ? (status as any)
+            : undefined,
+        includeConversationId:
+          typeof includeConversationId === "string" && includeConversationId
+            ? includeConversationId
+            : undefined,
+      }
     );
 
     res.json({ conversations });

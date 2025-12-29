@@ -32,6 +32,7 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  proposedActions?: string[];
 }
 
 export interface Conversation {

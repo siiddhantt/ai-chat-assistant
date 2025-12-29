@@ -12,6 +12,7 @@
     getVisitorId,
     storeConversationId,
     clearConversationId,
+    getStoredConversationId,
   } from "$lib/visitor";
   import * as Sidebar from "$lib/components/ui/sidebar";
   import { useSidebar } from "$lib/components/ui/sidebar/context.svelte";
@@ -43,7 +44,10 @@
     loading = true;
     error = null;
     try {
-      const response = await visitor.getRecentConversations(visitorId, 5);
+      const response = await visitor.getRecentConversations(visitorId, {
+        limit: 5,
+        includeConversationId: $chatStore.conversationId ?? undefined,
+      });
       conversations = response.conversations;
     } catch (err) {
       if (err instanceof ApiError && err.status !== 404) {
@@ -76,7 +80,7 @@
       }
     } else {
       storeConversationId(conv.tenantSlug, conv.id);
-      goto(`/chat/${conv.tenantSlug}`);
+      goto(`/chat/${conv.tenantSlug}`, { noScroll: true, keepFocus: true });
     }
 
     if (sidebar.isMobile) {
@@ -94,16 +98,17 @@
     if (!conversationToDelete) return;
 
     try {
-      await visitor.deleteConversation(conversationToDelete.id, visitorId);
-      if (conversationToDelete) {
-        conversations = conversations.filter(
-          (c) => conversationToDelete && c.id !== conversationToDelete.id
-        );
+      const toDelete = conversationToDelete;
+      await visitor.deleteConversation(toDelete.id, visitorId);
+      conversations = conversations.filter((c) => c.id !== toDelete.id);
+
+      const stored = getStoredConversationId(toDelete.tenantSlug);
+      if (stored === toDelete.id) {
+        clearConversationId(toDelete.tenantSlug);
       }
 
-      if ($chatStore.conversationId === conversationToDelete.id) {
+      if ($chatStore.conversationId === toDelete.id) {
         chatStore.startNew();
-        clearConversationId(conversationToDelete.tenantSlug);
       }
 
       deleteConfirmOpen = false;
@@ -138,7 +143,7 @@
     <ScrollArea class="flex-1">
       <Sidebar.Group class="p-2">
         <Sidebar.GroupContent>
-          {#if loading}
+          {#if loading && conversations.length === 0}
             <div
               class="flex items-center justify-center py-8 text-muted-foreground"
             >

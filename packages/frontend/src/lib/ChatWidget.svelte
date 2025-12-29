@@ -43,12 +43,10 @@
     isUserScrolling = !isScrolledToBottom();
   }
 
-  async function handleSendMessage() {
-    if (!inputValue.trim() || !$chatStore.tenantSlug) return;
+  async function sendUserMessage(userMessage: string) {
+    if (!userMessage.trim() || !$chatStore.tenantSlug) return;
 
-    const userMessage = inputValue;
     const isFirstMessage = !$chatStore.conversationId;
-    inputValue = "";
 
     chatStore.addMessage({
       id: `msg-${Date.now()}`,
@@ -94,6 +92,21 @@
     }
   }
 
+  async function handleSendMessage() {
+    const userMessage = inputValue;
+    inputValue = "";
+    await sendUserMessage(userMessage);
+  }
+
+  function handleQuickSend(e: CustomEvent<string>) {
+    if ($chatStore.loading) return;
+    sendUserMessage(e.detail);
+  }
+
+  function handleQuickEdit(e: CustomEvent<string>) {
+    inputValue = e.detail;
+  }
+
   function scrollToBottom() {
     if (!messagesContainer) return;
 
@@ -126,7 +139,7 @@
       <h1 class="text-xl font-semibold tracking-tight">{tenantName}</h1>
       <p class="text-xs text-muted-foreground font-mono mt-1">
         {$chatStore.conversationId
-          ? `ID: ${$chatStore.conversationId.slice(0, 8)}...`
+          ? `ID: ${$chatStore.conversationId}`
           : "New Conversation"}
       </p>
     </div>
@@ -148,7 +161,13 @@
       </div>
     {:else}
       {#each $chatStore.messages as message (message.id)}
-        <ChatMessage {message} />
+        <ChatMessage
+          {message}
+          showActions={message.role === "assistant" &&
+            message.id === $chatStore.lastAssistantId}
+          on:quickSend={handleQuickSend}
+          on:quickEdit={handleQuickEdit}
+        />
       {/each}
     {/if}
 

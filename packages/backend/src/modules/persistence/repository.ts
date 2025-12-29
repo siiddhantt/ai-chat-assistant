@@ -154,7 +154,11 @@ export class ConversationRepository {
 
   async findByVisitorIdAcrossTenants(
     visitorId: string,
-    limit = 5
+    options?: {
+      limit?: number;
+      status?: ConversationStatus;
+      includeConversationId?: string;
+    }
   ): Promise<
     {
       id: string;
@@ -164,20 +168,61 @@ export class ConversationRepository {
     }[]
   > {
     const db = getDb();
-    const result = await db`
-      SELECT 
-        c.id,
-        t.slug as "tenantSlug",
-        t.name as "tenantName",
-        c.updated_at as "updatedAt"
-      FROM conversations c
-      INNER JOIN customers cu ON c.customer_id = cu.id
-      INNER JOIN tenants t ON c.tenant_id = t.id
-      WHERE cu.visitor_id = ${visitorId}
-        AND c.status = 'active'
-      ORDER BY c.updated_at DESC
-      LIMIT ${limit}
-    `;
+    const limit = options?.limit ?? 5;
+
+    const includeId = options?.includeConversationId ?? null;
+
+    let result;
+    if (includeId) {
+      result = await db`
+        WITH forced AS (
+          SELECT 
+            c.id,
+            t.slug as "tenantSlug",
+            t.name as "tenantName",
+            c.updated_at as "updatedAt"
+          FROM conversations c
+          INNER JOIN customers cu ON c.customer_id = cu.id
+          INNER JOIN tenants t ON c.tenant_id = t.id
+          WHERE cu.visitor_id = ${visitorId}
+            AND c.id = ${includeId}
+            ${options?.status ? db`AND c.status = ${options.status}` : db``}
+        ),
+        rest AS (
+          SELECT 
+            c.id,
+            t.slug as "tenantSlug",
+            t.name as "tenantName",
+            c.updated_at as "updatedAt"
+          FROM conversations c
+          INNER JOIN customers cu ON c.customer_id = cu.id
+          INNER JOIN tenants t ON c.tenant_id = t.id
+          WHERE cu.visitor_id = ${visitorId}
+            ${options?.status ? db`AND c.status = ${options.status}` : db``}
+            AND c.id <> ${includeId}
+        )
+        SELECT * FROM forced
+        UNION ALL
+        SELECT * FROM rest
+        ORDER BY "updatedAt" DESC
+        LIMIT ${limit}
+      `;
+    } else {
+      result = await db`
+        SELECT 
+          c.id,
+          t.slug as "tenantSlug",
+          t.name as "tenantName",
+          c.updated_at as "updatedAt"
+        FROM conversations c
+        INNER JOIN customers cu ON c.customer_id = cu.id
+        INNER JOIN tenants t ON c.tenant_id = t.id
+        WHERE cu.visitor_id = ${visitorId}
+          ${options?.status ? db`AND c.status = ${options.status}` : db``}
+        ORDER BY c.updated_at DESC
+        LIMIT ${limit}
+      `;
+    }
     return result.map((row: Record<string, unknown>) => ({
       id: row.id as string,
       tenantSlug: row.tenantSlug as string,
